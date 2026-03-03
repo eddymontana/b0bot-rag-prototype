@@ -1,102 +1,83 @@
 import sys
 import os
+import uuid
 from dotenv import dotenv_values
-from pinecone import Pinecone , ServerlessSpec
+from pinecone import Pinecone, ServerlessSpec
 from sentence_transformers import SentenceTransformer
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
+# Path alignment for internal modules
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from cybernews.CyberNews import CyberNews
 
+# Load Environment
+config = dotenv_values(".env")
+PINECONE_API = config.get("PINECONE_API_KEY")
 
-PINECONE_API = dotenv_values(".env").get("PINECONE_API_KEY")
-
-# configure client
+# Configure Pinecone
 pc = Pinecone(api_key=PINECONE_API)
 index_name = "cybernews-index"
+namespace = "c2si"
 
-# Delete the index if it already exists, so as to save storage
-if index_name in pc.list_indexes().names():
-    pc.delete_index(index_name)
-    print(f"Deleted existing index: {index_name}")
-
-# Create or access the index
-if index_name not in pc.list_indexes():
+# 1. Index Management (Optimized: Check before deleting)
+if index_name not in pc.list_indexes().names():
     pc.create_index(
         name=index_name, 
         dimension=384, 
         metric='cosine',
-        spec=ServerlessSpec(
-            cloud='aws',
-            region='us-east-1'
-        )
+        spec=ServerlessSpec(cloud='aws', region='us-east-1')
     )
 
-# Connect to the index
 index = pc.Index(index_name)
 
-namespace = "c2si"
-
+# Load Embedding Model
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Different types of news
-news = CyberNews()
+# Fetch News
+news_scraper = CyberNews()
+categories = ["general", "cyberAttack", "vulnerability", "malware", "security", "dataBreach"]
 
-newsBox = dict()
+# 2. Batch Processing Engine (The AI/ML standard)
+batch_limit = 100
+upsert_batch = []
 
-newsBox["general_news"] = news.get_news("general")
+print(f"🚀 Starting news update for index: {index_name}...")
 
-newsBox["cyber_attack_news"] = news.get_news("cyberAttack")
-
-newsBox["vulnerability_news"] = news.get_news("vulnerability")
-
-newsBox["malware_news"] = news.get_news("malware")
-
-newsBox["security_news"] = news.get_news("security")
-
-newsBox["data_breach_news"] = news.get_news("dataBreach")   
-
-
-"""
-News Format:
-
-news = {
-    "id: ""
-    "headlines": "",
-    "author": "",
-    "fullNews": "",
-    "newsURL": "",
-    "newsImgURL":
-    "newsDate": "",
-}
-
-Notice: "id" should be removed before the news is inserted into the database. newsImgURL also not important right now.
-"""
-
-# Convert news articles to vectors and upsert into Pinecone
-for news_type, articles in newsBox.items():
+for category in categories:
+    articles = news_scraper.get_news(category)
+    print(f"--- Fetching {len(articles)} articles for category: {category} ---")
+    
     for article in articles:
-        # Combine headline and full news for embedding
-        text = article["headlines"] + " " + article["fullNews"]
+        # Prepare content for embedding
+        content_to_embed = f"{article['headlines']} {article['fullNews']}"
         
-        # Convert text to vector
-        vector = model.encode(text).tolist()  # Ensure the vector is a list
+        # Create Vector
+        vector = model.encode(content_to_embed).tolist()
         
-        # Prepare the document ID (use unique identifiers from your data)
-        document_id = article["id"]
-        document_id = str(document_id)
+        # Metadata Alignment (Added 'category' and 'timestamp' for better filtering)
+        # Note: We use the ID from our Sorting class (which is now a deterministic hash)
+        doc_id = str(article["id"])
         
-        # Prepare metadata
         metadata = {
             "headlines": article["headlines"],
             "author": article["author"],
-            "fullNews": article["fullNews"],
+            "fullNews": article["fullNews"][:1000],  # Pinecone metadata size limit precaution
             "newsURL": article["newsURL"],
             "newsImgURL": article["newsImgURL"],
-            "newsDate": article["newsDate"]
+            "newsDate": article["newsDate"],
+            "category": category  # Crucial for filtered RAG queries
         }
         
-        # Upsert the vector with metadata into Pinecone
-        index.upsert([(document_id, vector, metadata)] , namespace=namespace)
+        upsert_batch.append((doc_id, vector, metadata))
         
-        print(f"Inserted article ID: {document_id} with metadata into index: {index_name}")
+        # 3. Perform Batch Upsert
+        if len(upsert_batch) >= batch_limit:
+            index.upsert(vectors=upsert_batch, namespace=namespace)
+            print(f"✅ Upserted batch of {len(upsert_batch)} articles.")
+            upsert_batch = []
 
+# Final sweep for remaining articles
+if upsert_batch:
+    index.upsert(vectors=upsert_batch, namespace=namespace)
+    print(f"✅ Final batch of {len(upsert_batch)} upserted.")
+
+print("✨ Database update complete.")

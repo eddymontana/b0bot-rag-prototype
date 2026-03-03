@@ -1,198 +1,171 @@
 """
-    Class for Exception Handling and Extracting data out of complex strings
+Class for Exception Handling and Extracting data out of complex strings
+Optimized for C2SI b0bot Standard 2026
 """
 import concurrent.futures
-
 import httpx
 from bs4 import BeautifulSoup
+from urllib.parse import urljoin
 
 from .performance import Performance
 from .sorting import Sorting
 
-
 class Extractor(Performance):
     def __init__(self):
         """
-        Initializing the Extractor class
+        Initializing the Extractor class with Parent Performance metrics.
         """
-        # Call the constructor of the parent class (Performance)
         super().__init__()
-        # Initiate a session using requests
-        self.session = httpx.Client()
-        # Create an instance of the Sorting class
+        # Use a connection pool for better performance in threads
+        self.session = httpx.Client(http2=True, verify=False)
         self.sorting = Sorting()
-        # Get the headers for the HTTP requests
-        self.headers = self.headers()
+        self.headers = self.headers()  # Inherited from Performance
 
-    # Extracting Author Name
+    def _get_attribute_safely(self, element, selector_type, base_url=None):
+        """
+        Internal utility to bypass lazy loading and handle relative URLs.
+        """
+        if not element:
+            return "N/A"
+
+        if selector_type == "image":
+            # Check multiple lazy-loading attributes common in news sites
+            attributes = ['data-src', 'data-lazy-src', 'srcset', 'src', 'data-original']
+            for attr in attributes:
+                val = element.get(attr)
+                if val:
+                    # Handle srcset (take first image)
+                    if attr == 'srcset':
+                        val = val.split(',')[0].split(' ')[0]
+                    return urljoin(base_url, val.strip()) if base_url else val.strip()
+
+        elif selector_type == "link":
+            val = element.get('href')
+            if val:
+                return urljoin(base_url, val.strip()) if base_url else val.strip()
+
+        return "N/A"
+
     def _author_name_extractor(self, name: str):
-        """
-        Extract the author name from a given string.
-
-        Args:
-        name (str): the name to extract from.
-
-        Returns:
-        str: the extracted author name.
-        """
-        # Use the '_pattern1' regular expression to remove unwanted characters
+        """Extracts and formats author name using regex patterns from Performance."""
         author_name = self.remove_symbols(self._pattern1.sub("", name))
-
         if not self.is_valid_author_name(author_name):
             return "N/A"
         return self.format_author_name(author_name)
 
-    # Checking is news or some random advertisement
     def _check_ad(self, news_date: str):
-        """
-        Check if a given date string represents an advertisement.
-
-        Args:
-        news_date (str): the date string to check.
-
-        Returns:
-        bool: True if the date string represents an advertisement, False otherwise.
-        """
-        # Use the '_pattern4' regular expression to search for the advertisement indicator
+        """Checks if the date string is actually an ad indicator."""
         return self._pattern4.search(news_date) is not None
 
-    # Extracting NewsDate
-    def _news_date_extractor(self, date: str, news_date: str) -> str:
-        """
-        Extract the news date from a given string.
+    def _news_date_extractor(self, date_str: str) -> str:
+        """Extracts news date using patterns from Performance class."""
+        # Clean the date string using inherited patterns
+        clean_date = self._pattern3.sub("", self._pattern2.sub("", date_str))
+        match = self._pattern5.match(clean_date)
+        return match.group() if match else "N/A"
 
-        Args:
-        date (str): the string to extract the news date from.
-        news_date (str): an additional string to use in the extraction process.
-
-        Returns:
-        str: the extracted news date, or 'N/A' if the date could not be extracted.
-        """
-        # Use two regular expressions to remove unwanted characters
-        date = self._pattern3.sub("", self._pattern2.sub("", date))
-        # Use the '_pattern5' regular expression to match the news date
-        return self._pattern5.match(date).group() if news_date != "" else "N/A"
-
-    # Extracting Data From Single News
     def _extract_data_from_single_news(self, url: str, value: dict):
         """
-        Extract data from a single news article.
-
-        Args:
-            url (str): The URL of the news article.
-            value (dict): The CSS selectors for extracting news data.
-
-        Returns:
-            list: A list of dictionaries with the extracted news data.
+        Extract data from a single news article source based on JSON selectors.
         """
         news_data_from_single_news = []
         try:
             response = self.session.get(url, timeout=20, headers=self.headers)
             soup = BeautifulSoup(response.text, "lxml")
-        except (httpx.RequestError, httpx.TimeoutException) as e:
+        except Exception as e:
             print(f"Request to {url} failed: {e}")
             return []
-        news_headlines = soup.select(value["headlines"])
-        raw_news_author = (
-            soup.select(value["author"]) if value["author"] is not None else ""
-        )
-        news_full_news = soup.select(value["fullNews"])
-        news_url = soup.select(value["newsURL"])
-        news_img_url = soup.select(value["newsImg"])
-        raw_news_date = soup.select(value["date"]) if value["date"] is not None else ""
 
-        for index in range(len(news_headlines)):
-            if raw_news_date:
-                news_date = self._news_date_extractor(
-                    raw_news_date[index].text.strip(), raw_news_date
-                )
-            else:
-                news_date = "N/A"
+        # Map JSON keys to Soup selectors
+        headlines = soup.select(value.get("headlines", ""))
+        authors = soup.select(value["author"]) if value.get("author") else []
+        full_news = soup.select(value.get("fullNews", ""))
+        urls = soup.select(value.get("newsURL", ""))
+        images = soup.select(value.get("newsImg", ""))
+        dates = soup.select(value["date"]) if value.get("date") else []
 
-            if raw_news_author:
-                news_author = self._author_name_extractor(
-                    raw_news_author[index].text.strip()
-                )
-            else:
-                news_author = "N/A"
+        for index in range(len(headlines)):
+            try:
+                # 1. Date Extraction
+                raw_date = dates[index].text.strip() if index < len(dates) else ""
+                news_date = self._news_date_extractor(raw_date) if raw_date else "N/A"
+                
+                if self._check_ad(news_date):
+                    continue
 
-            if self._check_ad(news_date):
+                # 2. Author Extraction
+                raw_author = authors[index].text.strip() if index < len(authors) else ""
+                news_author = self._author_name_extractor(raw_author) if raw_author else "N/A"
+
+                # 3. URL Extraction via Utility (Handles relative links)
+                link_tag = urls[index] if index < len(urls) else None
+                target_url = self._get_attribute_safely(link_tag, "link", base_url=url)
+                
+                if target_url == "N/A" or not self.valid_url_check(target_url):
+                    continue
+
+                # 4. Content & Spam Check
+                headline_text = headlines[index].text.strip()
+                body_text = full_news[index].text.strip() if index < len(full_news) else ""
+                
+                if self.spam_content_check(headline_text + " " + body_text):
+                    continue
+
+                # 5. Image Extraction via Utility (Bypasses lazy loading)
+                img_tag = images[index] if index < len(images) else None
+                img_url = self._get_attribute_safely(img_tag, "image", base_url=url)
+
+                # ALIGNMENT: Use sort_key for date-logic and id for the final hash (in Sorting)
+                complete_news = {
+                    "sort_key": self.sorting.ordering_date(news_date),
+                    "headlines": headline_text,
+                    "author": news_author,
+                    "fullNews": body_text,
+                    "newsURL": target_url,
+                    "newsImgURL": img_url,
+                    "newsDate": news_date,
+                    "source": url
+                }
+                news_data_from_single_news.append(complete_news)
+            except Exception:
                 continue
 
-            if not self.valid_url_check(news_url[index]["href"]):
-                continue
+        return self._remove_duplicates(news_data_from_single_news)
 
-            if self.spam_content_check(news_headlines[index].text.strip() + " " + news_full_news[index].text.strip()):
-                continue
-
-            complete_news = {
-                "id": self.sorting.ordering_date(news_date),
-                "headlines": news_headlines[index].text.strip(),
-                "author": news_author,
-                "fullNews": news_full_news[index].text.strip(),
-                "newsURL": news_url[index]["href"],
-                "newsImgURL": news_img_url[index]["data-src"],
-                "newsDate": news_date,
-            }
-            news_data_from_single_news.append(complete_news)
-
-        # Remove duplicates before sorting
-        unique_news_data_from_single_news = self._remove_duplicates(news_data_from_single_news)
-        return self.sorting.ordering_news(unique_news_data_from_single_news)
-
-    # Extracting Data Using Tags
-    def data_extractor(self, news: list) -> list:
+    def data_extractor(self, news_config_list: list) -> list:
         """
-        Extract news data from a given list of news headers.
-
-        Args:
-        news_header (list): a list of dictionaries containing news headers.
-
-        Returns:
-        list: a list of dictionaries containing the extracted news data.
+        Threading Engine: Processes multiple news categories/URLs in parallel.
         """
-
-        # Initialize an empty list to store the extracted news data
         news_data = []
+        
+        with concurrent.futures.ThreadPoolExecutor(max_workers=10) as executor:
+            future_to_url = {}
+            for category_dict in news_config_list:
+                for category, sources in category_dict.items():
+                    for source in sources:
+                        # source is a dict like {"https://url...": {selectors...}}
+                        for url, selectors in source.items():
+                            future = executor.submit(self._extract_data_from_single_news, url, selectors)
+                            future_to_url[future] = url
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            future_to_news = {
-                executor.submit(self._extract_data_from_single_news, url, value): (
-                    url,
-                    value,
-                )
-                for single_news in news
-                for url, value in single_news.items()
-            }
-            for future in concurrent.futures.as_completed(future_to_news):
-                url = future_to_news[future]
+            for future in concurrent.futures.as_completed(future_to_url):
+                url = future_to_url[future]
                 try:
-                    news_data_from_single_news = future.result()
-                    news_data.extend(news_data_from_single_news)
+                    data = future.result()
+                    news_data.extend(data)
                 except Exception as exc:
                     print(f"{url} generated an exception: {exc}")
 
-        # Remove duplicates before sorting
-        unique_news_data = self._remove_duplicates(news_data)
-        return self.sorting.ordering_news(unique_news_data)
+        # Final step: Sort by date and assign deterministic IDs (Hashes)
+        return self.sorting.ordering_news(news_data)
 
-    # Removing Duplicates
     def _remove_duplicates(self, news_data: list) -> list:
-        """
-        Remove duplicate news items based on specific criteria.
-
-        Args:
-            news_data (list): A list of dictionaries containing news data.
-
-        Returns:
-            list: A list with duplicate entries removed.
-        """
+        """Removes duplicates within a single source scrape."""
         seen = set()
-        unique_news_data = []
+        unique_data = []
         for item in news_data:
-            # Use a tuple of fields that should be unique to identify duplicates
-            identifier = (item["headlines"], item["newsURL"], item["newsDate"])
+            identifier = (item["headlines"].lower(), item["newsURL"])
             if identifier not in seen:
                 seen.add(identifier)
-                unique_news_data.append(item)
-        return unique_news_data
+                unique_data.append(item)
+        return unique_data

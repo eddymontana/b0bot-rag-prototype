@@ -1,0 +1,19 @@
+services:
+  b0bot-agent:
+    build: .
+    container_name: b0bot-container
+    ports:
+      - "5000:5000"
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+    environment:
+      - FLASK_ENV=development
+      - PYTHONUNBUFFERED=1
+    restart: always
+
+# C2SI Standard: Use a bridge network for internal service communication
+networks:
+  default:
+    driver: bridge

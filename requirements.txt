@@ -1,15 +1,23 @@
-python-dotenv
-Flask
-langchain
-openai==0.27.8
-gunicorn==19.7.1
-pymongo==4.4.0
-dnspython==2.3.0
-huggingface_hub
-beautifulsoup4==4.11.2
-lxml==4.9.2
-httpx==0.23.3
-requests==2.28.2
-pinecone-client
-langchain-pinecone
-sentence-transformers
+# --- Core Framework ---
+flask==3.0.3
+python-dotenv==1.0.1
+
+# --- AI & Orchestration (2026 Standards) ---
+langchain==0.3.0
+langgraph==0.2.14
+langchain-mistralai==0.2.0
+langchain-huggingface==0.1.0
+
+# --- Vector Database & RAG ---
+langchain-pinecone==0.2.1
+pinecone-client==5.4.0
+sentence-transformers==3.0.1
+
+# --- Scraping Logic (C2SI Aligned) ---
+beautifulsoup4==4.12.3
+requests==2.32.3
+playwright==1.50.0
+
+# --- Utilities ---
+pydantic==2.8.2
+typing-extensions>=4.12.0
