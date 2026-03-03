@@ -1,9 +1,9 @@
 flask==3.0.3
 python-dotenv==1.0.1
-playwright==1.50.0
-langchain==0.3.0
-langgraph==0.2.39
-langchain-mistralai==0.2.0
-langchain-huggingface==0.1.0
-langchain-pinecone==0.2.1
-pinecone-client==5.0.1
+playwright
+langchain
+langgraph
+langchain-mistralai
+langchain-huggingface
+langchain-pinecone
+pinecone-client
