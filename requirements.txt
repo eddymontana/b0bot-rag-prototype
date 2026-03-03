@@ -1,23 +1,9 @@
-# --- Core Framework ---
 flask==3.0.3
 python-dotenv==1.0.1
-
-# --- AI & Orchestration (2026 Standards) ---
+playwright==1.50.0
 langchain==0.3.0
 langgraph==0.2.14
 langchain-mistralai==0.2.0
 langchain-huggingface==0.1.0
-
-# --- Vector Database & RAG ---
 langchain-pinecone==0.2.1
-pinecone-client==5.4.0
-sentence-transformers==3.0.1
-
-# --- Scraping Logic (C2SI Aligned) ---
-beautifulsoup4==4.12.3
-requests==2.32.3
-playwright==1.50.0
-
-# --- Utilities ---
-pydantic==2.8.2
-typing-extensions>=4.12.0
+pinecone-client==5.0.1
