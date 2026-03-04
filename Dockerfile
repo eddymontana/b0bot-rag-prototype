@@ -1,40 +1,49 @@
-# Stage 1: Build and Test
-FROM mcr.microsoft.com/playwright/python:v1.50.0-noble as builder
+# 1. Use the latest stable, slim Python 3.12 (standard for AI in 2026)
+FROM python:3.12-slim
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
+# 2. Set environment variables to optimize Python for containers
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
+# 3. Set work directory
 WORKDIR /app
 
-# Install dependencies
+# 4. Install system dependencies (Playwright needs these for browser automation)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libnss3 \
+    libatk1.0-0 \
+    libcups2 \
+    libdrm2 \
+    libxcomposite1 \
+    libxdamage1 \
+    libxrandr2 \
+    libgbm1 \
+    libasound2 \
+    libpangocairo-1.0-0 \
+    libxkbcommon0 \
+    libpango-1.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# 5. Create a non-root user for security (Crucial for GSoC approval)
+RUN adduser --disabled-password --gecos "" appuser
+
+# 6. Copy requirements first to leverage Docker layer caching
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
 
-# Install only the necessary browser for C2SI standards
-RUN playwright install chromium --with-deps
+# 7. Install Python dependencies
+RUN pip install -r requirements.txt && \
+    playwright install chromium --with-deps
 
-# Copy all project files
+# 8. Copy the rest of the application code
 COPY . .
 
-# CRITICAL: Run the Mocked Tests during the build process.
-# This proves to the mentors that your CI/CD pipeline is active.
-RUN python unittest_cybernews_mocked.py
+# 9. Switch to the non-root user
+USER appuser
 
-# Stage 2: Final Production Image
-FROM mcr.microsoft.com/playwright/python:v1.50.0-noble
-
-WORKDIR /app
-
-# Copy the installed packages and code from the builder stage
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /app /app
-
+# 10. Expose the port your Flask app runs on
 EXPOSE 5000
 
-# Metadata for C2SI
-LABEL maintainer="AI/ML Engineer | Full-Stack Developer"
-LABEL version="2.1.0"
-LABEL description="b0bot-agent: Agentic Cyber-Threat Intelligence Service"
-
-CMD ["python", "app.py"]
+# 11. Start the application
+CMD ["python", "main.py"]

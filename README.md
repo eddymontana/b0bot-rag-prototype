@@ -42,7 +42,10 @@ Key improvements include **deterministic unit testing**, **multi-stage container
 
 ### **Prerequisites**
 - Docker & Docker Compose installed.
-- A `.env` file containing your `PINECONE_API_KEY` and `OPENAI_API_KEY`.
+- # .env template
+PINECONE_API_KEY=your_pinecone_key_here
+HUGGINGFACEHUB_API_TOKEN=your_huggingface_token_here
+MISTRAL_API_KEY=your_mistral_key_here
 
 ### **Installation & Deployment**
 1. **Clone the repository:**
