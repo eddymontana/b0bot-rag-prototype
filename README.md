@@ -1,54 +1,42 @@
-# b0bot-rag-prototype 🤖🛡️
+# b0bot-rag-prototype
+## GSoC 2026 Prototype for C2SI
 
-### **Autonomous Agentic Cyber-Threat Intelligence**
-*A GSoC 2026 Proposal Prototype for C2SI (Community-owned Cloud Services Initiative)*
+# Goal
+This prototype validates the migration of b0bot from a linear retrieval tool to an Agentic RAG system. It focuses on modularizing the news ingestion pipeline and establishing a CI/CD-ready environment.
 
----
 
-## 🚀 Overview
-This repository serves as the technical foundation for my GSoC 2026 proposal. It evolves the 2024 **b0bot** framework from a linear retrieval tool into an **Autonomous Agentic RAG (Retrieval-Augmented Generation)** system. 
+# Implementation Details (Phase 1)
+## 1. Verification & Testing
+Mocked Unit Tests: Uses unittest.mock to verify the CyberNews scraper and extractor logic without hitting live endpoints.
 
-Key improvements include **deterministic unit testing**, **multi-stage containerization**, and a **modular LangGraph architecture** designed for scalable threat analysis.
+CI/CD Pipeline: GitHub Actions automated to run tests on every push, ensuring dependency stability.
 
----
+## 2. Infrastructure & Deployment
+Optimized Dockerfile: Multi-stage build using a Python-slim base. Includes Playwright dependencies and a non-root user (appuser) for security compliance.
 
-## ✨ Key Features (Phase 1 Complete)
+Orchestration: docker-compose.yml configured for environment parity across local and remote dev.
 
-### 1. Production-Grade Reliability
-* **Deterministic Mocking:** Implemented a robust `unittest` suite using `unittest.mock` to verify scraping and extraction logic without network dependency.
-* **CI/CD Readiness:** The testing suite is integrated directly into the build pipeline to ensure only verified code is deployable.
+## 3. Architecture
+Service-Based Design: Refactored CyberNews.py as a standalone module to fit into the b0bot service layer.
 
-### 2. Modern Containerization
-* **Multi-Stage Docker Build:** Optimized Dockerfile using `playwright/python` base to ensure a lightweight production image with all necessary browser dependencies.
-* **Orchestration:** Pre-configured `docker-compose.yml` for seamless environment parity across development and production.
+JSend Standard: Flask API responses follow JSend specifications for predictable frontend consumption.
 
-### 3. Agentic Foundation
-* **Modular Service Design:** Refactored the `CyberNews` service to act as a standalone tool for a future LangGraph-driven autonomous loop.
-* **JSend-Compliant API:** Standardized Flask response structures for both threat analysis and news retrieval.
 
----
+## Stack
+Core: Python 3.12, Flask, Docker
+Intelligence: LangGraph, LangChain (Mistral-7B via API)
+Memory: Pinecone (Vector Index), HuggingFace (Embeddings)
+Scraping: Playwright
 
-## 🛠️ Tech Stack
-* **Language:** Python 3.11+
-* **Framework:** Flask (Application Factory Pattern)
-* **AI/ML:** LangGraph, LangChain, SentenceTransformers
-* **Vector DB:** Pinecone
-* **Automation:** Playwright (Web Scraping)
-* **Infrastructure:** Docker, Docker Compose
+## Setup
+## 1. Environment Variables
+Create a .env file in the root:
 
----
+PINECONE_API_KEY=your_key
+HUGGINGFACEHUB_API_TOKEN=your_token
+MISTRAL_API_KEY=your_key
 
-## 🚦 Quick Start
-
-### **Prerequisites**
-- Docker & Docker Compose installed.
-- # .env template
-PINECONE_API_KEY=your_pinecone_key_here
-HUGGINGFACEHUB_API_TOKEN=your_huggingface_token_here
-MISTRAL_API_KEY=your_mistral_key_here
-
-### **Installation & Deployment**
-1. **Clone the repository:**
-   ```bash
-   git clone [https://github.com/eddymontana/b0bot-rag-prototype.git](https://github.com/eddymontana/b0bot-rag-prototype.git)
-   cd b0bot-rag-prototype
+## 2. Deployment
+git clone https://github.com/eddymontana/b0bot-rag-prototype.git
+cd b0bot-rag-prototype
+docker-compose up --build
