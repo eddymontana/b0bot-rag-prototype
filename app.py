@@ -4,7 +4,7 @@ from services.AgentService import app_graph
 from cybernews.CyberNews import CyberNews  # <--- Import your service
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 def create_app():
     app = Flask(__name__)
